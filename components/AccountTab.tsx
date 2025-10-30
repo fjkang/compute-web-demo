@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
 interface AccountTabProps {
   broker: any;
@@ -7,8 +6,11 @@ interface AccountTabProps {
   setMessage: (message: string) => void;
 }
 
-export default function AccountTab({ broker, message, setMessage }: AccountTabProps) {
-
+export default function AccountTab({
+  broker,
+  message,
+  setMessage,
+}: AccountTabProps) {
   const [balance, setBalance] = useState<{
     total: number;
     available: number;
@@ -55,6 +57,7 @@ export default function AccountTab({ broker, message, setMessage }: AccountTabPr
       setDepositAmount("");
       await fetchBalance();
     } catch (err) {
+      console.error("充值失败:", err);
       setMessage("充值失败");
     }
     setLoading(false);
@@ -65,8 +68,6 @@ export default function AccountTab({ broker, message, setMessage }: AccountTabPr
     fetchBalance();
   }, [broker]);
 
-  
-  
   return (
     <div>
       <h2>账户余额</h2>
