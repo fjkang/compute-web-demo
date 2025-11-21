@@ -8,12 +8,12 @@ import { defineChain } from 'viem';
 
 // 定义 0G 测试网
 const zgTestnet = defineChain({
-  id: 16601,
+  id: 16602,
   name: '0G Testnet',
   nativeCurrency: {
     decimals: 18,
-    name: 'A0GI',
-    symbol: 'A0GI',
+    name: '0G',
+    symbol: '0G',
   },
   rpcUrls: {
     default: {
@@ -29,11 +29,10 @@ const zgTestnet = defineChain({
   testnet: true,
 });
 
-// 配置 wagmi
 const config = getDefaultConfig({
   appName: '0G Broker Starter Kit',
-  projectId: 'YOUR_PROJECT_ID', // 需要从 WalletConnect 获取
-  chains: [zgTestnet], // 使用 0G 测试网
+  projectId: 'YOUR_PROJECT_ID',
+  chains: [zgTestnet],
   ssr: true,
 });
 
