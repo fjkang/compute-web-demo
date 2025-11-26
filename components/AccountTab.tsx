@@ -1,8 +1,10 @@
 
 import { useState, useEffect } from 'react';
+import { ZGComputeNetworkBroker } from "@0glabs/0g-serving-broker";
+import { ethers } from 'ethers';
 
 interface AccountTabProps {
-  broker: any;
+  broker: ZGComputeNetworkBroker;
   message: string;
   setMessage: (message: string) => void;
 }
@@ -10,11 +12,14 @@ interface AccountTabProps {
 export default function AccountTab({ broker, message, setMessage }: AccountTabProps) {
 
   const [balance, setBalance] = useState<{
-    total: number;
-    available: number;
+    total: bigint;
+    locked: bigint;
+    available: bigint;
   } | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
+  const [refundAmount, setRefundAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingRefund, setLoadingRefund] = useState(false);
 
   // 获取余额
   const fetchBalance = async () => {
@@ -22,9 +27,9 @@ export default function AccountTab({ broker, message, setMessage }: AccountTabPr
 
     try {
       const { ledgerInfo } = await broker.ledger.ledger.getLedgerWithDetail();
-      const total = Number(ledgerInfo[0]) / 1e18;
-      const locked = Number(ledgerInfo[1]) / 1e18;
-      setBalance({ total, available: total - locked });
+      const total = ledgerInfo[0];
+      const locked = ledgerInfo[1];
+      setBalance({ total, locked, available: total - locked });
     } catch {
       setBalance(null);
     }
@@ -43,7 +48,7 @@ export default function AccountTab({ broker, message, setMessage }: AccountTabPr
       try {
         await broker.ledger.ledger.getLedgerWithDetail();
         hasLedger = true;
-      } catch {}
+      } catch { }
 
       if (hasLedger) {
         await broker.ledger.depositFund(amount);
@@ -59,6 +64,35 @@ export default function AccountTab({ broker, message, setMessage }: AccountTabPr
     }
     setLoading(false);
   };
+  // 退款处理
+  const handleRefund = async () => {
+    if (!broker || !refundAmount) return;
+    const amount = parseFloat(refundAmount);
+
+    setLoadingRefund(true);
+    try {
+      // 检查是否有账本
+      let hasLedger = false;
+      try {
+        let ledgerInfo = await broker.ledger.ledger.getLedgerWithDetail();
+        console.log(ledgerInfo);
+        hasLedger = true;
+      } catch { }
+
+      if (hasLedger) {
+        await broker.ledger.refund(amount);
+        setMessage(`退款 ${amount} A0GI 成功`);
+        setRefundAmount("");
+        await fetchBalance();
+      } else {
+        setMessage("没有账本，无法退款");
+      }
+    } catch (err) {
+      console.log(err);
+      setMessage("退款失败");
+    }
+    setLoadingRefund(false);
+  };
 
   // 自动获取余额
   useEffect(() => {
@@ -72,8 +106,8 @@ export default function AccountTab({ broker, message, setMessage }: AccountTabPr
       <h2>账户余额</h2>
       {balance ? (
         <p>
-          余额: {balance.available.toFixed(4)} A0GI (总计:{" "}
-          {balance.total.toFixed(4)})
+          可用余额: {ethers.formatEther(balance.available)} A0GI (总计:{" "}
+          {ethers.formatEther(balance.total)}  锁定:{" "} {ethers.formatEther(balance.locked)})
         </p>
       ) : (
         <p>暂无账本</p>
@@ -95,6 +129,24 @@ export default function AccountTab({ broker, message, setMessage }: AccountTabPr
           {loading ? "处理中..." : "充值"}
         </button>
       </div>
+      <div style={{ marginTop: "20px" }}>
+        <input
+          type="number"
+          value={refundAmount}
+          onChange={(e) => setRefundAmount(e.target.value)}
+          placeholder="退款金额"
+          style={{ padding: "5px", marginRight: "10px" }}
+        />
+        <button
+          onClick={handleRefund}
+          disabled={loadingRefund}
+          style={{ padding: "5px 15px" }}
+        >
+          {loadingRefund ? "处理中..." : "退款"}
+        </button>
+      </div>
+
+
     </div>
   );
 }
