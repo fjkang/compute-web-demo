@@ -1,8 +1,10 @@
 
 import { useState, useEffect } from 'react';
+import { ZGComputeNetworkBroker } from "@0glabs/0g-serving-broker";
+import { ethers } from 'ethers';
 
 interface ServiceTabProps {
-  broker: any;
+  broker: ZGComputeNetworkBroker;
   selectedProvider: any;
   setSelectedProvider: (provider: any) => void;
   message: string;
@@ -19,6 +21,25 @@ export default function ServiceTab({
 
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const fetchBalance = async () => {
+    if (!broker) return;
+    try {
+      const account = await broker.inference.getAccount(selectedProvider.address);
+      setSelectedProvider({ ...selectedProvider, balance: account.balance });
+    } catch (e) {
+      return;
+    }
+  }
+  const retrieveFund = async () => {
+    if (!broker || (selectedProvider.balance === 0)) return;
+    try {
+      await broker.ledger.retrieveFund("inference");
+      setMessage("退款成功");
+    } catch (err) {
+      console.log(err);
+      setMessage("退款失败");
+    }
+  }
 
   // 获取服务列表
   const fetchProviders = async () => {
@@ -27,10 +48,15 @@ export default function ServiceTab({
     setLoading(true);
     try {
       const services = await broker.inference.listService();
-      const list = services.map((s: any) => ({
-        address: s.provider || "",
-        name: s.name || s.model || "Unknown",
-        model: s.model || "Unknown",
+      // 循环services，设置provider信息
+      let list:any[] = services.map((s: any) => ({
+          address: s.provider || "",
+          name: s.name || s.model || "Unknown",
+          model: s.model || "Unknown",
+          url: s.url || "",
+          inputPrice: BigInt(s.inputPrice) || 0,
+          outputPrice: BigInt(s.outputPrice) || 0,
+          balance: 0,
       }));
       setProviders(list);
       if (list.length > 0 && !selectedProvider) {
@@ -89,6 +115,26 @@ export default function ServiceTab({
           {selectedProvider && (
             <div>
               <p>地址: {selectedProvider.address}</p>
+              <p>服务url: {selectedProvider.url}</p>
+              <p>输入价格: {ethers.formatEther(selectedProvider.inputPrice)} 0G / token </p>
+              <p>输出价格: {ethers.formatEther(selectedProvider.outputPrice)} 0G / token </p>
+              <div>
+                <p>余额: {ethers.formatEther(selectedProvider.balance)} 0G</p> 
+                <button
+                onClick={fetchBalance}
+                disabled={loading}
+                style={{ padding: "5px 15px", marginTop: "10px" }}
+              >
+                获取余额
+              </button>
+              <button
+                onClick={retrieveFund}
+                disabled={loading}
+                style={{ padding: "5px 15px", marginTop: "10px" }}
+              >
+                退款余额
+              </button>
+              </div>
               <button
                 onClick={verifyService}
                 disabled={loading}
