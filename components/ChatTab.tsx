@@ -1,5 +1,7 @@
 
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown'
+import gfm from 'remark-gfm'
 
 interface ChatTabProps {
   broker: any;
@@ -23,15 +25,58 @@ export default function ChatTab({
   // 重置消息历史
   useEffect(() => {
     if (selectedProvider) {
-      setMessages([]);
+      // 读取 localStorage 中的消息历史
+      const storedMessages = localStorage.getItem('messages');
+      // 获取最近10次对话
+      setMessages(storedMessages ? JSON.parse(storedMessages).slice(-20)  : []);
     }
   }, [selectedProvider]);
+
+  // 定义获取币对24hr的变化情况接口函数
+  // https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=0gusdt
+  const get24hrChangeBySymbol = async (symbol: string) => {
+    try {
+      const response = await fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching 24hr change:', error);
+    }
+  }
 
   // 发送消息（基础版本）
   const sendMessage = async () => {
     if (!broker || !selectedProvider || !inputMessage.trim()) return;
 
+    const sysMsg = {
+      role: "system", content: `
+        你是全能的AI助手。
+        如果用户询问币对相关信息时，请提取币对参数并调用https://fapi.binance.com/fapi里的行情数据。
+        基于返回的数据，提供专业的投资分析和建议。分析时应考虑：
+        1. 价格涨跌幅情况
+        2. 交易量变化
+        3. 市场活跃度
+        4. 风险提示
+        请确保分析客观、专业，并提醒用户投资有风险。`
+    }
     const userMsg = { role: "user", content: inputMessage };
+    // 配置tools参数，当用户查询币对投资建议时，调用币对24小时行情API
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "get24hrChangeBySymbol",
+          description: "当用户询问币对相关信息时，调用币对24小时行情API",
+          parameters: {
+            type: "object",
+            properties: {
+              symbol: { "type": "string" }
+            },
+            required: ["symbol"]
+          }
+        }
+      }
+    ]
     setMessages((prev) => [...prev, userMsg]);
     setInputMessage("");
     setLoading(true);
@@ -40,7 +85,7 @@ export default function ChatTab({
       const metadata = await broker.inference.getServiceMetadata(selectedProvider.address);
       const headers = await broker.inference.getRequestHeaders(
         selectedProvider.address,
-        JSON.stringify([userMsg])
+        JSON.stringify([sysMsg, userMsg])
       );
 
       let account;
@@ -69,13 +114,43 @@ export default function ChatTab({
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
-          messages: [userMsg],
+          messages: [sysMsg, userMsg],
           model: metadata.model,
           stream: false,
+          // tools: tools, // 弃用tools方式，使用system promote方式
         }),
       });
 
-      const result = await response.json();
+      let result = await response.json();
+      // console.log("result: ", result);
+      // // 判断是否为tool_calls调用
+      // if (result.choices[0].finish_reason === "tool_calls") {
+      //   const function_data = result.choices[0].message.tool_calls[0]
+      //   console.log("function_data: ", function_data);
+      //   if (function_data.function.name === "get24hrChangeBySymbol") {
+      //     const args = JSON.parse(function_data.function.arguments);
+      //     // 调用币对24小时行情API
+      //     let priceData = await get24hrChangeBySymbol(args.symbol)
+      //     console.log("priceData: ", priceData);
+      //     const functionCallMsg = { role: "user", content: `根据币安fapi返回的${JSON.stringify(priceData)}，输出交易分析`}
+      //     const headersToolCall = await broker.inference.getRequestHeaders(
+      //       selectedProvider.address,
+      //       JSON.stringify([functionCallMsg])
+      //     );
+      //     const functionCallResult = await fetch(`${metadata.endpoint}/chat/completions`, {
+      //       method: "POST",
+      //       headers: { "Content-Type": "application/json", ...headersToolCall },
+      //       body: JSON.stringify({
+      //         messages: [functionCallMsg],
+      //         model: metadata.model,
+      //         stream: false,
+      //       }),
+      //     });
+      //     result = await functionCallResult.json();
+      //     console.log("functionCallResult: ", result);
+      //   }
+      // }
+
       const aiMsg = {
         role: "assistant",
         content: result.choices[0].message.content,
@@ -127,6 +202,12 @@ export default function ChatTab({
         content: "错误: " + (err instanceof Error ? err.message : String(err))
       }]);
     }
+    // 返回最终验证结果后，更新 messages到本地存储
+    setMessages((history) => {
+      // 在这里可以访问最新的 messages
+      localStorage.setItem('messages', JSON.stringify(history));
+      return history;
+    });
     setLoading(false);
   };
 
@@ -162,7 +243,9 @@ export default function ChatTab({
         ) : (
           messages.map((msg, i) => (
             <div key={i} style={{ marginBottom: "10px" }}>
-              <strong>{msg.role === "user" ? "你" : "AI"}:</strong> {msg.content}
+              <strong>{msg.role === "user" ? "你" : "AI"}:</strong> 
+              {/* 安装react-markdown包，支持响应中markdown的渲染显示 */}
+              <ReactMarkdown remarkPlugins={[gfm]}>{msg.content}</ReactMarkdown>
               {msg.role === "assistant" && msg.id && (
                 <span style={{ 
                   marginLeft: "10px", 
