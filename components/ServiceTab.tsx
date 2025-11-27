@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { ZGComputeNetworkBroker } from "@0glabs/0g-serving-broker";
 import { ethers } from 'ethers';
+import moment, { duration } from 'moment';
 
 interface ServiceTabProps {
   broker: ZGComputeNetworkBroker;
@@ -21,15 +22,53 @@ export default function ServiceTab({
 
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const fetchBalance = async () => {
+  const [transferAmount, setTransferAmount] = useState("");
+  const [subAccount, setSubAccount] = useState({balance: BigInt(0), amount: BigInt(0), remainTime: BigInt(0)});
+
+  const convertSecToHHmmss = (sec: number) => {
+    let currentTime = duration(sec, "seconds");
+    // 将获取到的下轮间隔秒数转换成时分秒
+    return moment({
+      h: currentTime.hours(),
+      m: currentTime.minutes(),
+      s: currentTime.seconds(),
+    }).format("HH:mm:ss");
+  }
+
+  const fetchSubAcount = async () => {
     if (!broker) return;
     try {
-      const account = await broker.inference.getAccount(selectedProvider.address);
-      setSelectedProvider({ ...selectedProvider, balance: account.balance });
+      const account = await broker.inference.getAccountWithDetail(selectedProvider.address);
+      setSubAccount({...subAccount,
+          balance: account[0].balance
+        })
+      if (account[1]){
+        setSubAccount({
+          balance: account[0].balance,
+          amount: account[1][0].amount,
+          remainTime: account[1][0].remainTime,
+        })
+      }
     } catch (e) {
       return;
     }
   }
+  const transferFund = async () => {
+    if (!broker || !transferAmount) return;
+
+    setLoading(true);
+    try {
+      const amount = parseFloat(transferAmount);
+      await broker.ledger.transferFund(selectedProvider.address,"inference", BigInt(amount * 1e18));
+      setMessage(`授权子账号 ${amount} A0GI 成功`);
+      setTransferAmount("");
+      await fetchSubAcount();
+    } catch (err) {
+      setMessage("授权失败");
+    }
+    setLoading(false);
+  }
+
   const retrieveFund = async () => {
     if (!broker || (selectedProvider.balance === 0)) return;
     try {
@@ -98,6 +137,7 @@ export default function ServiceTab({
             onChange={(e) => {
               const p = providers.find((p) => p.address === e.target.value);
               setSelectedProvider(p);
+              setSubAccount({balance: BigInt(0), amount: BigInt(0), remainTime: BigInt(0)});
             }}
             style={{
               padding: "5px",
@@ -118,29 +158,42 @@ export default function ServiceTab({
               <p>服务url: {selectedProvider.url}</p>
               <p>输入价格: {ethers.formatEther(selectedProvider.inputPrice)} 0G / token </p>
               <p>输出价格: {ethers.formatEther(selectedProvider.outputPrice)} 0G / token </p>
-              <div>
-                <p>余额: {ethers.formatEther(selectedProvider.balance)} 0G</p> 
-                <button
-                onClick={fetchBalance}
+              <button
+                onClick={verifyService}
                 disabled={loading}
-                style={{ padding: "5px 15px", marginTop: "10px" }}
+                className="px-4 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-gray-400"
+              >
+                {loading ? "验证中..." : "验证服务"}
+              </button>
+              <p>子账号余额: {ethers.formatEther(subAccount.balance)} 0G  （退款信息： 待退款金额：{ethers.formatEther(subAccount.amount)} 退款剩余时间：{convertSecToHHmmss(Number(subAccount.remainTime))}）</p>
+              
+              <button
+                onClick={fetchSubAcount}
+                disabled={loading}
+                className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
               >
                 获取余额
+              </button>
+              <input
+                type="number"
+                value={transferAmount}
+                onChange={(e) => setTransferAmount(e.target.value)}
+                placeholder="充值金额"
+                className="block flex-1 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={transferFund}
+                disabled={loading}
+                className="block px-4 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+              >
+                充值子账号
               </button>
               <button
                 onClick={retrieveFund}
                 disabled={loading}
-                style={{ padding: "5px 15px", marginTop: "10px" }}
+                className="block px-4 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
               >
-                退款余额
-              </button>
-              </div>
-              <button
-                onClick={verifyService}
-                disabled={loading}
-                style={{ padding: "5px 15px", marginTop: "10px" }}
-              >
-                {loading ? "验证中..." : "验证服务"}
+                退款子账号
               </button>
             </div>
           )}

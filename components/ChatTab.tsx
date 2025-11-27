@@ -88,28 +88,6 @@ export default function ChatTab({
         JSON.stringify([sysMsg, userMsg])
       );
 
-      let account;
-      try {
-        account = await broker.inference.getAccount(selectedProvider.address);
-      } catch (error) {
-        await broker.ledger.transferFund(
-          selectedProvider.address,
-          "inference",
-          BigInt(2e18)
-        );
-      }
-
-      console.log("账户信息:", account);
-      console.log("账户信息:", account.balance);
-      if (account.balance <= BigInt(1.5e18)) {
-        console.log("子账户余额不足，正在充值...");
-        await broker.ledger.transferFund(
-          selectedProvider.address,
-          "inference",
-          BigInt(2e18)
-        );
-      }
-
       const response = await fetch(`${metadata.endpoint}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
