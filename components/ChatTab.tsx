@@ -211,6 +211,48 @@ export default function ChatTab({
     setLoading(false);
   };
 
+  // 自定义 Markdown 组件样式
+  const MarkdownComponents = {
+    p: ({ children }: any) => <p className="my-2">{children}</p>,
+    code: ({ inline, className, children }: any) => {
+      return inline ?
+        <code className="bg-gray-100 px-1 py-0.5 rounded text-sm">{children}</code> :
+        <pre className="bg-gray-100 p-4 rounded-lg overflow-auto my-2">
+          <code className={className}>{children}</code>
+        </pre>
+    },
+    ul: ({ children }: any) => <ul className="my-2 pl-6">{children}</ul>,
+    ol: ({ children }: any) => <ol className="my-2 pl-6">{children}</ol>,
+    li: ({ children }: any) => <li className="my-1">{children}</li>,
+    h1: ({ children }: any) => <h1 className="text-2xl font-bold my-2">{children}</h1>,
+    h2: ({ children }: any) => <h2 className="text-xl font-semibold my-2">{children}</h2>,
+    h3: ({ children }: any) => <h3 className="text-lg font-medium my-2">{children}</h3>,
+    blockquote: ({ children }: any) => (
+      <blockquote className="border-l-4 border-gray-300 pl-4 my-2 text-gray-600">
+        {children}
+      </blockquote>
+    ),
+    table: ({ children }: any) => (
+      <table className="min-w-full divide-y divide-gray-200">{children}</table>
+    ),
+    thead: ({ children }: any) => (
+      <thead className="bg-gray-50">{children}</thead>
+    ),
+    tbody: ({ children }: any) => (
+      <tbody className="bg-white divide-y divide-gray-200">{children}</tbody>
+    ),
+    tr: ({ children }: any) => (
+      <tr>{children}</tr>
+    ),
+    th: ({ children }: any) => (
+      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{children}</th>
+    ),
+    td: ({ children }: any) => (
+      <td className="px-6 py-4 text-sm text-gray-900">{children}</td>
+    ),
+  };
+
+
   if (!selectedProvider) {
     return (
       <div>
@@ -227,36 +269,44 @@ export default function ChatTab({
         当前服务: {selectedProvider.name} - {selectedProvider.model}
       </div>
       
-      <div
-        style={{
-          height: "300px",
-          overflowY: "auto",
-          border: "1px solid #ddd",
-          padding: "10px",
-          marginBottom: "10px",
-        }}
-      >
+      <div className="h-96 overflow-y-auto p-5 mb-5 bg-gray-50 rounded-xl flex flex-col gap-4">
         {messages.length === 0 ? (
-          <div style={{ color: "#666", fontStyle: "italic" }}>
+          <div className="text-gray-500 italic text-center mt-40">
             开始与 AI 对话...
           </div>
         ) : (
           messages.map((msg, i) => (
-            <div key={i} style={{ marginBottom: "10px" }}>
-              <strong>{msg.role === "user" ? "你" : "AI"}:</strong> 
-              {/* 安装react-markdown包，支持响应中markdown的渲染显示 */}
-              <ReactMarkdown remarkPlugins={[gfm]}>{msg.content}</ReactMarkdown>
+            <div
+              key={i}
+              className={`flex flex-col max-w-[80%] ${msg.role === "user" ? "ml-auto" : "mr-auto"
+                }`}
+            >
+              <div className={`
+          p-4 rounded-xl shadow-sm break-words
+          ${msg.role === "user"
+                  ? "bg-blue-500 text-white"
+                  : "bg-white text-gray-800"
+                }
+        `}>
+                <ReactMarkdown
+                  remarkPlugins={[gfm]}
+                  components={MarkdownComponents}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
               {msg.role === "assistant" && msg.id && (
-                <span style={{ 
-                  marginLeft: "10px", 
-                  fontSize: "12px",
-                  color: msg.verifyError ? "#dc3545" : 
-                         msg.verified ? "#28a745" : 
-                         verifyingMessageId === msg.id ? "#ffc107" : "#6c757d"
-                }}>
+                <span className={`
+            mt-1 text-xs
+            ${msg.verifyError ? "text-red-500" :
+                    msg.verified ? "text-green-500" :
+                      verifyingMessageId === msg.id ? "text-yellow-500" : "text-gray-500"
+                  }
+            ${msg.role === "user" ? "ml-auto" : "mr-auto"}
+          `}>
                   {msg.verifyError ? "❌ 验证失败" :
-                   msg.verified ? "✓ 已验证" : 
-                   verifyingMessageId === msg.id ? "⏳ 验证中..." : "⚠️ 未验证"}
+                    msg.verified ? "✓ 已验证" :
+                      verifyingMessageId === msg.id ? "⏳ 验证中..." : "⚠️ 未验证"}
                 </span>
               )}
             </div>
@@ -264,19 +314,28 @@ export default function ChatTab({
         )}
       </div>
 
-      <div style={{ display: "flex" }}>
+      <div className="flex gap-3 p-4 bg-white rounded-xl shadow-sm">
         <input
           type="text"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !loading && sendMessage()}
           placeholder="输入消息..."
-          style={{ flex: 1, padding: "5px", marginRight: "10px" }}
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-full 
+               outline-none text-sm transition-all duration-300
+               focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
         />
         <button
           onClick={sendMessage}
           disabled={loading || !inputMessage.trim()}
-          style={{ padding: "5px 15px" }}
+          className={`
+      px-5 py-2 rounded-full text-white font-medium
+      transition-all duration-300
+      ${loading || !inputMessage.trim()
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-500 hover:bg-blue-600 active:scale-95"
+            }
+    `}
         >
           {loading ? "发送中..." : "发送"}
         </button>
